@@ -5,22 +5,20 @@ import cv2
 import numpy as np
 import torch
 import torchvision.transforms as transforms
-from torchvision import models
 from PIL import Image
-import requests
-from transformers import BlipProcessor, BlipForConditionalGeneration, pipeline
+from keybert import KeyBERT
+import sys
+
+# 경로 등록
+sys.path.append('./yolov5')
+sys.path.append('./U-2-Net')
 
 app = Flask(__name__)
 CORS(app)
 
-# 모델 준비
-blip_processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
-blip_model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base")
-emotion_classifier = pipeline("text-classification", model="j-hartmann/emotion-english-distilroberta-base")
-resnet_model = models.resnet50(pretrained=True)
-resnet_model.eval()
+kw_model = KeyBERT()
 
-# 이미지 분석 함수들
+# ---------------- 분석 함수들 ----------------
 def analyze_colors(image):
     hsv = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
     avg_color = np.mean(image, axis=(0, 1))
@@ -38,25 +36,79 @@ def extract_features(image):
     keypoints, _ = sift.detectAndCompute(gray, None)
     return len(keypoints)
 
-def classify_animal(image):
-    preprocess = transforms.Compose([
-        transforms.ToPILImage(),
-        transforms.Resize((224, 224)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                             std=[0.229, 0.224, 0.225]),
+def edge_detection(image, save_path="static/edge_result.jpg"):
+    gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+    edges = cv2.Canny(gray, 100, 200)
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    cv2.imwrite(save_path, edges)
+    return save_path
+
+def detect_objects_with_yolo(image_np):
+    model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True)
+    results = model(image_np)
+    detections = results.pandas().xyxy[0]
+    output = []
+    for _, row in detections.iterrows():
+        output.append({
+            "label": row["name"],
+            "confidence": float(row["confidence"]),
+            "bbox": [float(row["xmin"]), float(row["ymin"]), float(row["xmax"]), float(row["ymax"])]
+        })
+    return output
+
+def simulate_brain_activation(description_features):
+    mapping = {
+        "color": "V4 – 색상 처리",
+        "edge": "V1 – 윤곽 처리",
+        "shape": "V3 – 형태 인식",
+        "object": "FFA – 대상을 시각적으로 인식",
+        "motion": "MT/V5 – 움직임 처리"
+    }
+    activated = set()
+    for word in description_features:
+        for key in mapping:
+            if key in word.lower():
+                activated.add(mapping[key])
+    if not activated:
+        activated.add("V1 – 기본 시각 처리")
+    return list(activated)
+
+def segment_image(image_pil, save_path="static/segmentation_result.png"):
+    from u2net_test import normPRED
+    from model import U2NET
+
+    model_path = './U-2-Net/saved_models/u2net/u2net_portrait.pth'
+    net = U2NET(3, 1)
+    if torch.cuda.is_available():
+        net.load_state_dict(torch.load(model_path))
+        net.cuda()
+    else:
+        net.load_state_dict(torch.load(model_path, map_location='cpu'))
+    net.eval()
+
+    transform = transforms.Compose([
+        transforms.Resize((320, 320)),
+        transforms.ToTensor()
     ])
-    input_tensor = preprocess(image).unsqueeze(0)
+
+    image_tensor = transform(image_pil).unsqueeze(0)
+    if torch.cuda.is_available():
+        image_tensor = image_tensor.cuda()
+
     with torch.no_grad():
-        output = resnet_model(input_tensor)
-    class_id = output.argmax(dim=1).item()
-    return f"Predicted class ID: {class_id}"
+        d1, _, _, _, _, _, _ = net(image_tensor)
+        pred = d1[:, 0, :, :]
+        pred = normPRED(pred)
+        pred = pred.squeeze().cpu().numpy()
 
-def blip_caption(image):
-    inputs = blip_processor(images=image, return_tensors="pt")
-    out = blip_model.generate(**inputs)
-    return blip_processor.decode(out[0], skip_special_tokens=True)
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    pred = (pred * 255).astype(np.uint8)
+    mask = Image.fromarray(pred).convert("L")
+    mask.save(save_path)
 
+    return save_path
+
+# ---------------- 라우터 ----------------
 @app.route("/analyze", methods=["POST"])
 def analyze_image():
     file = request.files.get("image")
@@ -67,13 +119,25 @@ def analyze_image():
     cv_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
     rgb_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB)
 
-    # 분석 시작
-    result = {}
-    result["colors"] = analyze_colors(rgb_image)
-    result["features"] = extract_features(rgb_image)
-    result["classification"] = classify_animal(rgb_image)
-    result["caption"] = blip_caption(image)
-    result["emotion"] = emotion_classifier(result["caption"])
+    from transformers import BlipProcessor, BlipForConditionalGeneration
+    processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
+    model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base")
+    inputs = processor(images=image, return_tensors="pt")
+    output = model.generate(**inputs)
+    caption = processor.decode(output[0], skip_special_tokens=True)
+
+    keywords = kw_model.extract_keywords(caption, keyphrase_ngram_range=(1, 2), stop_words='english', top_n=5)
+    description_features = [kw for kw, _ in keywords]
+
+    result = {
+        "features": extract_features(rgb_image),
+        "colors": analyze_colors(rgb_image),
+        "detected_parts": detect_objects_with_yolo(rgb_image),
+        "description_features": description_features,
+        "brain_regions": simulate_brain_activation(description_features),
+        "edge_image_url": edge_detection(rgb_image),
+        "segmentation_mask_url": segment_image(image)
+    }
 
     return jsonify(result)
 
