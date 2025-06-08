@@ -1,47 +1,13 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState } from "react";
 import axios from "axios";
-import { Bar } from "react-chartjs-2";
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-} from "chart.js";
-
-ChartJS.register(CategoryScale, LinearScale, BarElement);
 
 function ImageUpload() {
-  const [image, setImage] = useState(null);
-  const [image2, setImage2] = useState(null);
   const [video, setVideo] = useState(null);
-  const [result, setResult] = useState(null);
-  const [flowResult, setFlowResult] = useState(null);
   const [videoResult, setVideoResult] = useState(null);
-  const [showRaw, setShowRaw] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const canvasRef = useRef(null);
-
-  const handleImageChange = (e) => setImage(e.target.files[0]);
-  const handleImage2Change = (e) => setImage2(e.target.files[0]);
-  const handleVideoChange = (e) => setVideo(e.target.files[0]);
-
-  const handleSubmitImage = async (e) => {
-    e.preventDefault();
-    if (!image) return;
-    const formData = new FormData();
-    formData.append("image", image);
-    const res = await axios.post("http://localhost:5000/analyze", formData);
-    setResult(res.data);
-  };
-
-  const handleSubmitFlow = async (e) => {
-    e.preventDefault();
-    if (!image || !image2) return;
-    const formData = new FormData();
-    formData.append("image1", image);
-    formData.append("image2", image2);
-    const res = await axios.post("http://localhost:5000/opticalflow", formData);
-    setFlowResult(res.data);
+  const handleVideoChange = (e) => {
+    setVideo(e.target.files[0]);
   };
 
   const handleSubmitVideo = async (e) => {
@@ -49,300 +15,276 @@ function ImageUpload() {
     if (!video) return;
     const formData = new FormData();
     formData.append("video", video);
-    const res = await axios.post("http://localhost:5000/videoflow", formData);
-    setVideoResult(res.data);
-  };
-
-  useEffect(() => {
-    if (flowResult && canvasRef.current) {
-      const canvas = canvasRef.current;
-      const ctx = canvas.getContext("2d");
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      const magnitude = flowResult.optical_flow?.average_magnitude || 0;
-      const angle = flowResult.optical_flow?.average_angle || 0;
-
-      ctx.beginPath();
-      ctx.arc(100, 100, magnitude * 20, 0, 2 * Math.PI);
-      ctx.fillStyle = `hsl(${angle * (180 / Math.PI)}, 100%, 50%)`;
-      ctx.fill();
-      ctx.font = "14px Arial";
-      ctx.fillStyle = "black";
-      ctx.fillText(`Mag: ${magnitude.toFixed(2)}`, 10, 20);
-      ctx.fillText(`Angle: ${angle.toFixed(2)}`, 10, 40);
+    setLoading(true);
+    try {
+      const res = await axios.post("http://localhost:5000/analyze", formData);
+      setVideoResult(res.data);
+    } catch (err) {
+      console.error("영상 분석 실패:", err);
+      alert("영상 분석 실패");
+    } finally {
+      setLoading(false);
     }
-  }, [flowResult]);
+  };
 
   return (
     <div style={{ padding: "2rem" }}>
-      <h2>시각 분석 도구</h2>
-
-      <form onSubmit={handleSubmitImage}>
-        <h3>이미지 분석</h3>
-        <input type="file" accept="image/*" onChange={handleImageChange} />
-        <button type="submit">분석</button>
-      </form>
-
-      <form onSubmit={handleSubmitFlow} style={{ marginTop: "1rem" }}>
-        <h3>이미지 Optical Flow</h3>
-        <input type="file" accept="image/*" onChange={handleImageChange} />
-        <input type="file" accept="image/*" onChange={handleImage2Change} />
-        <button type="submit">Flow 분석</button>
-      </form>
+      <h2>🎥 비디오 시각 분석 도구</h2>
+      {loading && <p style={{ color: "blue" }}>🌀 분석 중입니다...</p>}
 
       <form onSubmit={handleSubmitVideo} style={{ marginTop: "1rem" }}>
-        <h3>비디오 Optical Flow</h3>
+        <h3>비디오 업로드</h3>
         <input type="file" accept="video/*" onChange={handleVideoChange} />
-        <button type="submit">비디오 분석</button>
+        <button type="submit">분석 시작</button>
       </form>
-
-      {result && (
-        <div style={{ marginTop: "2rem" }}>
-          <h4>결과 요약</h4>
-          <p>Feature 개수: {result.features}</p>
-          <p>Object 개수: {result.object_count}</p>
-          <p>Caption: {result.caption}</p>
-          <p>Keyword: {result.description_features?.join(", ")}</p>
-          <p>활성 뇌영역: {result.brain_regions?.join(", ")}</p>
-
-          <h4>수치 데이터</h4>
-          <table border="1">
-            <tbody>
-              <tr>
-                <td>평균 밝기</td>
-                <td>{result.colors?.avg_brightness?.toFixed(2)}</td>
-              </tr>
-              <tr>
-                <td>평균 채도</td>
-                <td>{result.colors?.avg_saturation?.toFixed(2)}</td>
-              </tr>
-              <tr>
-                <td>평균 색상 R</td>
-                <td>{result.colors?.avg_color[0]?.toFixed(0)}</td>
-              </tr>
-              <tr>
-                <td>평균 색상 G</td>
-                <td>{result.colors?.avg_color[1]?.toFixed(0)}</td>
-              </tr>
-              <tr>
-                <td>평균 색상 B</td>
-                <td>{result.colors?.avg_color[2]?.toFixed(0)}</td>
-              </tr>
-              <tr>
-                <td>Dominant Color R</td>
-                <td>{result.dominant_color?.[0]?.toFixed(0)}</td>
-              </tr>
-              <tr>
-                <td>Dominant Color G</td>
-                <td>{result.dominant_color?.[1]?.toFixed(0)}</td>
-              </tr>
-              <tr>
-                <td>Dominant Color B</td>
-                <td>{result.dominant_color?.[2]?.toFixed(0)}</td>
-              </tr>
-              <tr>
-                <td>Colorfulness</td>
-                <td>{result.colorfulness?.toFixed(2)}</td>
-              </tr>
-              <tr>
-                <td>Aspect Ratio</td>
-                <td>{result.aspect_ratio?.toFixed(2)}</td>
-              </tr>
-              <tr>
-                <td>Blur</td>
-                <td>{result.blur?.toFixed(2)}</td>
-              </tr>
-              <tr>
-                <td>Entropy</td>
-                <td>{result.entropy?.toFixed(2)}</td>
-              </tr>
-              <tr>
-                <td>Symmetry</td>
-                <td>{result.symmetry?.toFixed(2)}</td>
-              </tr>
-              <tr>
-                <td>Bright Region Ratio</td>
-                <td>{result.bright_region_ratio?.toFixed(2)}</td>
-              </tr>
-              <tr>
-                <td>Edge Density</td>
-                <td>{result.edge_density}</td>
-              </tr>
-              <tr>
-                <td>Contrast</td>
-                <td>{result.contrast?.toFixed(2)}</td>
-              </tr>
-            </tbody>
-          </table>
-
-          <h4>색상 시각화</h4>
-          <div style={{ display: "flex", gap: "1rem" }}>
-            <div>
-              <h5>평균 색상</h5>
-              <div
-                style={{
-                  width: "50px",
-                  height: "50px",
-                  backgroundColor: `rgb(${result.colors?.avg_color[0]}, ${result.colors?.avg_color[1]}, ${result.colors?.avg_color[2]})`,
-                  border: "1px solid black",
-                }}
-              ></div>
-            </div>
-            <div>
-              <h5>Dominant Color</h5>
-              <div
-                style={{
-                  width: "50px",
-                  height: "50px",
-                  backgroundColor: `rgb(${result.dominant_color?.[0]}, ${result.dominant_color?.[1]}, ${result.dominant_color?.[2]})`,
-                  border: "1px solid black",
-                }}
-              ></div>
-            </div>
-            <h4>
-              객체 Dominant Colors (Top{" "}
-              {result.dominant_color_object_list?.length})
-            </h4>
-            <div style={{ display: "flex", gap: "1rem" }}>
-              {result.dominant_color_object_list?.map((color, index) => (
-                <div key={index}>
-                  <h5>Color {index + 1}</h5>
-                  <div
-                    style={{
-                      width: "50px",
-                      height: "50px",
-                      backgroundColor: `rgb(${color[0]}, ${color[1]}, ${color[2]})`,
-                      border: "1px solid black",
-                    }}
-                  ></div>
-                  <p>R: {color[0]?.toFixed(0)}</p>
-                  <p>G: {color[1]?.toFixed(0)}</p>
-                  <p>B: {color[2]?.toFixed(0)}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <h4>이미지 결과</h4>
-          {result.segmentation_mask_url && (
-            <div>
-              <h5>Segmentation 결과</h5>
-              <img
-                src={`http://localhost:5000/${
-                  result.segmentation_mask_url
-                }?t=${Date.now()}`}
-                alt="Segmentation Result"
-                width="300"
-              />
-            </div>
-          )}
-          {result.edge_image_url && (
-            <div>
-              <h5>엣지 디텍션 결과</h5>
-              <img
-                src={`http://localhost:5000/${
-                  result.edge_image_url
-                }?t=${Date.now()}`}
-                alt="Edge Detection"
-                width="300"
-              />
-            </div>
-          )}
-
-          <h4>그래프</h4>
-          {result.texture_histogram && (
-            <div style={{ width: "300px" }}>
-              <h5>Texture Histogram</h5>
-              <Bar
-                data={{
-                  labels: result.texture_histogram.map((_, i) => `Bin ${i}`),
-                  datasets: [
-                    {
-                      label: "LBP Histogram",
-                      data: result.texture_histogram,
-                      backgroundColor: "rgba(75,192,192,0.6)",
-                    },
-                  ],
-                }}
-              />
-            </div>
-          )}
-          {result.hog_summary && (
-            <div style={{ width: "300px" }}>
-              <h5>HOG Summary (Top 20)</h5>
-              <Bar
-                data={{
-                  labels: result.hog_summary.map((_, i) => `F${i}`),
-                  datasets: [
-                    {
-                      label: "HOG Features",
-                      data: result.hog_summary,
-                      backgroundColor: "rgba(153,102,255,0.6)",
-                    },
-                  ],
-                }}
-              />
-            </div>
-          )}
-
-          <h4>객체 탐지</h4>
-          {result.detected_parts && (
-            <table border="1">
-              <thead>
-                <tr>
-                  <th>Label</th>
-                  <th>Confidence</th>
-                  <th>Bounding Box</th>
-                </tr>
-              </thead>
-              <tbody>
-                {result.detected_parts.map((obj, index) => (
-                  <tr key={index}>
-                    <td>{obj.label}</td>
-                    <td>{obj.confidence.toFixed(2)}</td>
-                    <td>{obj.bbox.map((v) => v.toFixed(1)).join(", ")}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-
-          <button onClick={() => setShowRaw(!showRaw)}>
-            {showRaw ? "JSON 숨기기" : "JSON 전체 보기"}
-          </button>
-          {showRaw && <pre>{JSON.stringify(result, null, 2)}</pre>}
-        </div>
-      )}
-
-      {flowResult && (
-        <div style={{ marginTop: "2rem" }}>
-          <h4>Optical Flow 분석 결과 (이미지 쌍)</h4>
-          {flowResult.optical_flow?.flow_image_path && (
-            <div>
-              <h5>Optical Flow 이미지</h5>
-              <img
-                src={`http://localhost:5000/${
-                  flowResult.optical_flow.flow_image_path
-                }?t=${Date.now()}`}
-                alt="Optical Flow"
-                width="300"
-              />
-            </div>
-          )}
-          <canvas
-            ref={canvasRef}
-            width={200}
-            height={200}
-            style={{ border: "1px solid black" }}
-          />
-          <pre>{JSON.stringify(flowResult, null, 2)}</pre>
-        </div>
-      )}
 
       {videoResult && (
         <div style={{ marginTop: "2rem" }}>
-          <h4>비디오 Optical Flow 분석 결과</h4>
-          <pre>{JSON.stringify(videoResult, null, 2)}</pre>
+          <h4>📊 프레임 단위 분석 결과</h4>
+          {videoResult.visual?.frame_analysis?.map((frame, index) => (
+            <div
+              key={index}
+              style={{
+                marginBottom: "2rem",
+                border: "1px solid gray",
+                padding: "1rem",
+              }}
+            >
+              <h5>프레임 #{frame.frame_index}</h5>
+              <p>
+                <strong>Caption:</strong> {frame.caption}
+              </p>
+              <p>
+                <strong>키워드:</strong>{" "}
+                {frame.description_features?.join(", ")}
+              </p>
+              <p>
+                <strong>객체 수:</strong> {frame.object_count}
+              </p>
+              <p>
+                <strong>객체 목록:</strong> {frame.detected_parts?.join(", ")}
+              </p>
+              <p>
+                <strong>활성 뇌 영역:</strong> {frame.brain_regions?.join(", ")}
+              </p>
+              <p>
+                <strong>색상 분석:</strong> {JSON.stringify(frame.colors)}
+              </p>
+              <p>
+                <strong>대표 색상:</strong>
+                <span
+                  style={{
+                    display: "inline-block",
+                    width: "20px",
+                    height: "20px",
+                    backgroundColor: `rgb(${frame.dominant_color?.join(",")})`,
+                    marginLeft: "0.5rem",
+                    border: "1px solid #000",
+                  }}
+                />
+                <span style={{ marginLeft: "0.5rem" }}>
+                  ({frame.dominant_color?.map((v) => Math.round(v)).join(", ")})
+                </span>
+              </p>
+
+              <p>
+                <strong>Dominant Object Colors:</strong>
+              </p>
+              <div
+                style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem" }}
+              >
+                {frame.dominant_color_object_list?.map((color, idx) => (
+                  <div key={idx} style={{ textAlign: "center" }}>
+                    <div
+                      style={{
+                        width: "30px",
+                        height: "30px",
+                        backgroundColor: `rgb(${color
+                          .map((v) => Math.round(v))
+                          .join(",")})`,
+                        border: "1px solid #000",
+                      }}
+                    />
+                    <small>{color.map((v) => Math.round(v)).join(",")}</small>
+                  </div>
+                ))}
+              </div>
+
+              <p>
+                <strong>Colorfulness:</strong> {frame.colorfulness?.toFixed(2)}
+              </p>
+              <p>
+                <strong>Aspect Ratio:</strong> {frame.aspect_ratio?.toFixed(2)}
+              </p>
+              <p>
+                <strong>Blur:</strong> {frame.blur?.toFixed(2)}
+              </p>
+              <p>
+                <strong>Entropy:</strong> {frame.entropy?.toFixed(2)}
+              </p>
+              <p>
+                <strong>Symmetry:</strong> {frame.symmetry?.toFixed(2)}
+              </p>
+              <p>
+                <strong>밝은 영역 비율:</strong>{" "}
+                {(frame.bright_region_ratio * 100).toFixed(2)}%
+              </p>
+              <p>
+                <strong>Edge 밀도:</strong> {frame.edge_density}
+              </p>
+              <p>
+                <strong>GLCM Contrast:</strong>{" "}
+                {frame.glcm_contrast?.toFixed(2)}
+              </p>
+              <p>
+                <strong>마스크 영역 비율:</strong>{" "}
+                {(frame.mask_area_ratio * 100).toFixed(2)}%
+              </p>
+              <p>
+                <strong>대비:</strong> {frame.contrast?.toFixed(2)}
+              </p>
+              <p>
+                <strong>HOG 요약:</strong>{" "}
+                {frame.hog_summary?.slice(0, 10).join(", ")} ...
+              </p>
+              <p>
+                <strong>텍스처 히스토그램:</strong>{" "}
+                {frame.texture_histogram?.slice(0, 10).join(", ")} ...
+              </p>
+              <p>
+                <strong>추출된 특징:</strong> {JSON.stringify(frame.features)}
+              </p>
+
+              {/* ✅ Segmentation & Edge 이미지 */}
+              <div style={{ display: "flex", gap: "1rem", marginTop: "1rem" }}>
+                <div>
+                  <p>
+                    <strong>Segmentation</strong>
+                  </p>
+                  <img
+                    src={`http://localhost:5000/${frame.segmentation_mask_url}`}
+                    alt="Segmentation Mask"
+                    width="300"
+                  />
+                </div>
+                <div>
+                  <p>
+                    <strong>Edge</strong>
+                  </p>
+                  <img
+                    src={`http://localhost:5000/${frame.edge_image_url}`}
+                    alt="Edge Detection"
+                    width="300"
+                  />
+                </div>
+              </div>
+            </div>
+          ))}
+
+          <h4>⚡ Optical Flow 분석</h4>
+          {videoResult.visual?.optical_flow?.map((flow, index) => (
+            <div
+              key={index}
+              style={{
+                marginBottom: "1rem",
+                borderTop: "1px dashed #aaa",
+                paddingTop: "0.5rem",
+              }}
+            >
+              <p>
+                프레임 {flow.between_frames[0]} → {flow.between_frames[1]}
+              </p>
+              <p>평균 속도: {flow.average_magnitude?.toFixed(2)}</p>
+              <p>평균 방향: {flow.average_angle?.toFixed(2)} rad</p>
+              <p>해석: {flow.motion_label}</p>
+            </div>
+          ))}
+
+          {/* 🔈 청각 분석 결과 */}
+          {videoResult.auditory && (
+            <div style={{ marginTop: "2rem" }}>
+              <h4>🔈 청각 분석 결과</h4>
+              {videoResult.auditory?.auditory_results?.map((segment, index) => (
+                <div
+                  key={index}
+                  style={{
+                    marginBottom: "2rem",
+                    border: "1px solid #ccc",
+                    padding: "1rem",
+                    borderRadius: "8px",
+                  }}
+                >
+                  <h5>🎧 구간 {segment.segment}</h5>
+                  <p>
+                    <strong>시간:</strong> {segment.start_sec}s ~{" "}
+                    {segment.end_sec}s
+                  </p>
+
+                  <p>
+                    <strong>YAMNet 상위 분류:</strong>
+                  </p>
+                  <ul>
+                    {segment.yamnet_top_predictions?.map(
+                      ([label, score], idx) => (
+                        <li key={idx}>
+                          {label} - {(score * 100).toFixed(2)}%
+                        </li>
+                      )
+                    )}
+                  </ul>
+
+                  <p>
+                    <strong>Claude 해석:</strong> {segment.claude_response}
+                  </p>
+
+                  <details>
+                    <summary>🔍 고급 음향 특징 보기</summary>
+                    <p>
+                      <strong>🎯 구간 MFCC:</strong>{" "}
+                      {JSON.stringify(segment.focus_features.mfcc)}
+                    </p>
+                    <p>
+                      <strong>🎯 구간 ZCR:</strong>{" "}
+                      {segment.focus_features.zcr.toFixed(5)}
+                    </p>
+                    <p>
+                      <strong>🎯 구간 Spectral Centroid:</strong>{" "}
+                      {segment.focus_features.centroid.toFixed(2)} Hz
+                    </p>
+                    <p>
+                      <strong>🎯 구간 Spectral Bandwidth:</strong>{" "}
+                      {segment.focus_features.bandwidth.toFixed(2)} Hz
+                    </p>
+                    <p>
+                      <strong>🎯 구간 Spectral Rolloff:</strong>{" "}
+                      {segment.focus_features.rolloff.toFixed(2)} Hz
+                    </p>
+
+                    <p>
+                      <strong>🎧 배경 MFCC:</strong>{" "}
+                      {JSON.stringify(segment.background_features.mfcc)}
+                    </p>
+                    <p>
+                      <strong>🎧 배경 ZCR:</strong>{" "}
+                      {segment.background_features.zcr.toFixed(5)}
+                    </p>
+                    <p>
+                      <strong>🎧 배경 Spectral Centroid:</strong>{" "}
+                      {segment.background_features.centroid.toFixed(2)} Hz
+                    </p>
+                    <p>
+                      <strong>🎧 배경 Spectral Bandwidth:</strong>{" "}
+                      {segment.background_features.bandwidth.toFixed(2)} Hz
+                    </p>
+                    <p>
+                      <strong>🎧 배경 Spectral Rolloff:</strong>{" "}
+                      {segment.background_features.rolloff.toFixed(2)} Hz
+                    </p>
+                  </details>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
