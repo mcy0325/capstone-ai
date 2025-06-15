@@ -75,6 +75,6 @@
 - [YAMNet (TFHub)](https://tfhub.dev/google/yamnet/1)
 - [Anthropic Claude](https://www.anthropic.com/index/claude)
 
----
+
 
 > 해당 프로젝트는 시청각 기반 인공뇌의 일부분을 기능적으로 시뮬레이션하며, 인지과학, UX보안, 감정 AI 등의 다양한 분야로 확장 가능한 기반 기술을 제안합니다.
