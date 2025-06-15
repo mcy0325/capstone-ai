@@ -31,15 +31,15 @@ def analyze():
     extract_audio(video_path, output_audio_path=audio_path)
 
     # 오디오 분석
-    attention_array = analyze_yamnet_only(audio_path)
-    print(f"??? attention_array {attention_array}")
+    attention_array = analyze_yamnet_only(audio_path)   
     
+    # attention 확인 
     attention_result = db_attention_api(attention_array)
+    
     if attention_result:
         audio_result=analyze_full_audio(audio_path)
         audio_segments = audio_result.get("segments", [])
         
-        print(f"--- {audio_result}")
 
         # 비주얼 분석 (오디오 구간 기반)
         visual_result, frames = analyze_visual(video_path, segments=audio_segments)
