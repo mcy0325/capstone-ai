@@ -18,6 +18,7 @@ function ImageUpload() {
     setLoading(true);
     try {
       const res = await axios.post("http://localhost:5000/analyze", formData);
+      console.log("resreres", res);
       setVideoResult(res.data);
     } catch (err) {
       console.error("영상 분석 실패:", err);
@@ -204,7 +205,7 @@ function ImageUpload() {
           {videoResult.auditory && (
             <div style={{ marginTop: "2rem" }}>
               <h4>🔈 청각 분석 결과</h4>
-              {videoResult.auditory?.auditory_results?.map((segment, index) => (
+              {videoResult.auditory?.map((segment, index) => (
                 <div
                   key={index}
                   style={{
@@ -216,69 +217,66 @@ function ImageUpload() {
                 >
                   <h5>🎧 구간 {segment.segment}</h5>
                   <p>
-                    <strong>시간:</strong> {segment.start_sec}s ~{" "}
-                    {segment.end_sec}s
+                    <strong>시간:</strong> {segment.start}s ~ {segment.end}s
                   </p>
 
                   <p>
                     <strong>YAMNet 상위 분류:</strong>
                   </p>
                   <ul>
-                    {segment.yamnet_top_predictions?.map(
-                      ([label, score], idx) => (
-                        <li key={idx}>
-                          {label} - {(score * 100).toFixed(2)}%
-                        </li>
-                      )
-                    )}
+                    {segment.yamnet_preds?.map(([label, score], idx) => (
+                      <li key={idx}>
+                        {label} - {(score * 100).toFixed(2)}%
+                      </li>
+                    ))}
                   </ul>
 
                   <p>
-                    <strong>Claude 해석:</strong> {segment.claude_response}
+                    <strong>Claude 해석:</strong> {segment.response}
                   </p>
 
                   <details>
                     <summary>🔍 고급 음향 특징 보기</summary>
                     <p>
                       <strong>🎯 구간 MFCC:</strong>{" "}
-                      {JSON.stringify(segment.focus_features.mfcc)}
+                      {JSON.stringify(segment.focus.mfcc)}
                     </p>
                     <p>
                       <strong>🎯 구간 ZCR:</strong>{" "}
-                      {segment.focus_features.zcr.toFixed(5)}
+                      {segment.focus.zcr.toFixed(5)}
                     </p>
                     <p>
                       <strong>🎯 구간 Spectral Centroid:</strong>{" "}
-                      {segment.focus_features.centroid.toFixed(2)} Hz
+                      {segment.focus.centroid.toFixed(2)} Hz
                     </p>
                     <p>
                       <strong>🎯 구간 Spectral Bandwidth:</strong>{" "}
-                      {segment.focus_features.bandwidth.toFixed(2)} Hz
+                      {segment.focus.bandwidth.toFixed(2)} Hz
                     </p>
                     <p>
                       <strong>🎯 구간 Spectral Rolloff:</strong>{" "}
-                      {segment.focus_features.rolloff.toFixed(2)} Hz
+                      {segment.focus.rolloff.toFixed(2)} Hz
                     </p>
 
                     <p>
                       <strong>🎧 배경 MFCC:</strong>{" "}
-                      {JSON.stringify(segment.background_features.mfcc)}
+                      {JSON.stringify(segment.background.mfcc)}
                     </p>
                     <p>
                       <strong>🎧 배경 ZCR:</strong>{" "}
-                      {segment.background_features.zcr.toFixed(5)}
+                      {segment.background.zcr.toFixed(5)}
                     </p>
                     <p>
                       <strong>🎧 배경 Spectral Centroid:</strong>{" "}
-                      {segment.background_features.centroid.toFixed(2)} Hz
+                      {segment.background.centroid.toFixed(2)} Hz
                     </p>
                     <p>
                       <strong>🎧 배경 Spectral Bandwidth:</strong>{" "}
-                      {segment.background_features.bandwidth.toFixed(2)} Hz
+                      {segment.background.bandwidth.toFixed(2)} Hz
                     </p>
                     <p>
                       <strong>🎧 배경 Spectral Rolloff:</strong>{" "}
-                      {segment.background_features.rolloff.toFixed(2)} Hz
+                      {segment.background.rolloff.toFixed(2)} Hz
                     </p>
                   </details>
                 </div>

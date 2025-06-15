@@ -345,8 +345,8 @@ def analyze_visual(video_path, segments=None):
 
     if segments:
         for idx, seg in enumerate(segments):
-            start_frame = int(seg["start_sec"] * fps)
-            end_frame = int(seg["end_sec"] * fps)
+            start_frame = int(seg["start"] * fps)
+            end_frame = int(seg["end"] * fps)
             
             if end_frame <= start_frame + 2:
                 continue

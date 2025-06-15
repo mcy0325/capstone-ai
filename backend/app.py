@@ -2,7 +2,8 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS 
 import os
 from visual import analyze_visual
-from auditory import analyze_audio
+from auditory import analyze_yamnet_only
+from auditory import analyze_full_audio
 from moviepy.editor import VideoFileClip
 
 app = Flask(__name__)
@@ -30,20 +31,37 @@ def analyze():
     extract_audio(video_path, output_audio_path=audio_path)
 
     # 오디오 분석
-    audio_result = analyze_audio(audio_path)
-    if not audio_result:
-        return jsonify({"error": "Audio analysis failed"}), 500
+    attention_array = analyze_yamnet_only(audio_path)
+    print(f"??? attention_array {attention_array}")
+    
+    attention_result = db_attention_api(attention_array)
+    if attention_result:
+        audio_result=analyze_full_audio(audio_path)
+        audio_segments = audio_result.get("segments", [])
+        
+        print(f"--- {audio_result}")
 
-    audio_segments = audio_result.get("segments", [])
+        # 비주얼 분석 (오디오 구간 기반)
+        visual_result, frames = analyze_visual(video_path, segments=audio_segments)
 
-    # 비주얼 분석 (오디오 구간 기반)
-    visual_result, frames = analyze_visual(video_path, segments=audio_segments)
-
-    # 정리된 JSON 결과 반환
-    return jsonify({
-        "visual": visual_result,
-        "auditory": audio_result
-    })
+        # 정리된 JSON 결과 반환
+        return jsonify({
+            "visual": visual_result,
+            "auditory": audio_result.get("results", [])
+        })
+    else:
+         return jsonify({
+            "visual": "attention 되지 않음",
+            "auditory": "attention 되지 않음"
+        })
+    
+def db_attention_api(attention_array):
+    if attention_array:
+        print("attention 감지됨")
+        return True
+    else:
+        print("attnetion 감지되지 않음")
+        return False
 
 if __name__ == "__main__":
     app.run(debug=True)
