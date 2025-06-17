@@ -120,7 +120,7 @@ YAMNet 상위 5개 후보:
 """
 
 
-def save_segment_graphs(y, sr, start, end, idx, output_dir="segment_graphs"):
+def save_segment_graphs(y, sr, start, end, idx, output_dir="static"):
     segment = y[start:end]
     hop_length = 512
     if not os.path.exists(output_dir): os.makedirs(output_dir)
@@ -148,6 +148,14 @@ def save_segment_graphs(y, sr, start, end, idx, output_dir="segment_graphs"):
     axs[2][0].set_title('Bandwidth')
     axs[2][1].plot(times, rolloff)
     axs[2][1].set_title('Rolloff')
+    
+    output_path = os.path.join(output_dir, f"segment_{idx}.png")
+    fig.tight_layout()
+    fig.savefig(output_path)
+    plt.close(fig)
+
+    
+    return output_path.replace("\\", "/")
 
 
 def merge_similar_segments(segments, sr, max_gap=0.4, centroid_thresh=300, zcr_thresh=0.05):
@@ -200,8 +208,9 @@ def analyze_full_audio(file_path):
         preds = classify_with_yamnet(y[s:e], sr)
         prompt = build_comparative_prompt(bg, focus, s/sr, e/sr, preds)
         resp = claude_api_call(prompt)
-        save_segment_graphs(y, sr, s, e, idx)
+        graph_url = save_segment_graphs(y, sr, s, e, idx)
         results.append({
+            "graph_url": graph_url,
             'segments':idx+1,
             'start':s/sr,'end':e/sr,
             'focus':focus,'background':bg,
@@ -210,5 +219,5 @@ def analyze_full_audio(file_path):
     segment_ranges = [ {"start": s/sr + 2.0, "end": e/sr + 2.0} for s, e in merged ]
     return {
         "results": results,
-        "segments": segment_ranges
+        "segments": segment_ranges,
     }

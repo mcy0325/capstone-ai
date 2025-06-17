@@ -219,7 +219,11 @@ function ImageUpload() {
                   <p>
                     <strong>시간:</strong> {segment.start}s ~ {segment.end}s
                   </p>
-
+                  <img
+                    src={`http://localhost:5000/${segment.graph_url}`}
+                    alt="Audio Graph"
+                    width="600"
+                  />
                   <p>
                     <strong>YAMNet 상위 분류:</strong>
                   </p>
